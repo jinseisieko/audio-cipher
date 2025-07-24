@@ -34,6 +34,7 @@ decoder_url = urls[1]
 
 folder_path = 'tests'
 pattern = re.compile(r'^test\d+\.txt$')
+print("-"*40)
 
 tests = sorted(f for f in os.listdir(folder_path) if pattern.match(f))
 for file_name in tests:
@@ -45,6 +46,8 @@ for file_name in tests:
 
     # импортируем функцию-шума
     module = __import__(f'tests.{test_id}', fromlist=['f'])
+    if "description" in dir(module):
+        print(f'test_description: {module.description}')
     distort = module.f
 
     try:
@@ -88,3 +91,4 @@ for file_name in tests:
     except Exception as e:
         print(f'error: {e}')
         print('dif: 1e9')
+    print("-"*40)
