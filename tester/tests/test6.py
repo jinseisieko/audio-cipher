@@ -1,5 +1,5 @@
 import numpy as np
-description = "white"
+description = "white + 100k"
 def f(audio: np.ndarray, snr_db: float = 20.0) -> np.ndarray:
     """Add white noise to achieve the given SNR (dB)."""
     power_signal = np.mean(audio ** 2)

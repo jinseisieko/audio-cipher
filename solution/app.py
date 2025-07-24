@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 SAMPLE_RATE = 44_100   # Hz
 BIT_DEPTH = 16         # bits per sample
 CHANNELS = 1
+ONE_SIZE = 32768
 
 app = FastAPI(swagger_ui_parameters={"syntaxHighlight": False})
 
@@ -57,12 +58,22 @@ def _empty_wav(duration_sec: float = 1.0) -> bytes:
 # ---------------------------- TODO: your logic ---------------------------- #
 
 def text_to_audio(text: str) -> bytes:
-    print(text)
     n_samples = int(SAMPLE_RATE * 10)
     line = np.zeros(n_samples, dtype=np.int16) 
 
-    for i, char in enumerate(text):
-        line[i] = int(char)+1
+    # for i, char in enumerate(text):
+    #     line[i] = int(char)+1
+    i = 0
+    for char in text:
+        t = int(char)
+        t = ONE_SIZE/12*(t+1)
+        line[i] = t
+        i += 1
+        line[i] = t
+        i += 1
+        line[i] = t
+        i += 1
+    
 
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wf:
@@ -85,10 +96,32 @@ def audio_to_text(wav_bytes: bytes) -> str:
     line = np.frombuffer(frames, dtype=np.int16)
     i = 0
     res = ''
-    while line[i] in range(1, 11):
-        res += str(line[i]-1)
+    while line[i] > ONE_SIZE/12-ONE_SIZE/24:
+        can = []
+        t = line[i]-1
+        for j in range(10):
+            if ONE_SIZE/12*(j+1)-ONE_SIZE/24 <= t <= ONE_SIZE/12*(j+1)+ONE_SIZE/24:
+                can.append(str(j))
+                break
         i += 1
-    print(res)
+        t = line[i]-1
+        for j in range(10):
+            if ONE_SIZE/12*(j+1)-ONE_SIZE/24 <= t <= ONE_SIZE/12*(j+1)+ONE_SIZE/24:
+                can.append(str(j))
+                break
+        i += 1
+        t = line[i]-1
+        for j in range(10):
+            if ONE_SIZE/12*(j+1)-ONE_SIZE/24 <= t <= ONE_SIZE/12*(j+1)+ONE_SIZE/24:
+                can.append(str(j))
+                break
+        i += 1
+        for e in can:
+            if can.count(e) > 1:
+                res += e
+                break
+        else:
+            res += can[0]
     return res
 
 
