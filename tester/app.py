@@ -11,7 +11,7 @@ import soundfile as sf
 from levenshtein_distance import levenshtein_distance
 
 # sol1 - сервис участника, sol2 - сервис референсного решения
-urls = ['http://sol1:8000', 'http://sol2:8000']
+urls = ['http://127.0.0.1:8000/', 'http://127.0.0.1:8000/']
 
 res = []
 attempts_count = 0
