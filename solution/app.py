@@ -57,18 +57,39 @@ def _empty_wav(duration_sec: float = 1.0) -> bytes:
 # ---------------------------- TODO: your logic ---------------------------- #
 
 def text_to_audio(text: str) -> bytes:
-    """Зашифровать *text* в WAV.  
-    Вернуть байтовое содержимое WAV‑файла."""
-    # TODO: реализуйте алгоритм кодирования.
-    #       Ниже временная заглушка: возвращаем 1сек тишины.
-    return _empty_wav(1.0)
+    print(text)
+    n_samples = int(SAMPLE_RATE * 10)
+    line = np.zeros(n_samples, dtype=np.int16) 
+
+    for i, char in enumerate(text):
+        line[i] = int(char)+1
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(BIT_DEPTH // 8)
+        wf.setframerate(SAMPLE_RATE)
+        wf.writeframes(line.tobytes())
+    return buf.getvalue()
 
 
 def audio_to_text(wav_bytes: bytes) -> str:
-    """Декодировать WAV‑байты обратно в текст."""
-    # TODO: реализуйте алгоритм декодирования.
-    #       Ниже временная заглушка.
-    return "<decoded text>"
+    buf = io.BytesIO(wav_bytes)
+    with wave.open(buf, "rb") as wf:
+        assert wf.getnchannels() == CHANNELS
+        assert wf.getsampwidth() == BIT_DEPTH // 8
+        assert wf.getframerate() == SAMPLE_RATE
+
+        frames = wf.readframes(wf.getnframes())
+    
+    line = np.frombuffer(frames, dtype=np.int16)
+    i = 0
+    res = ''
+    while line[i] in range(1, 11):
+        res += str(line[i]-1)
+        i += 1
+    print(res)
+    return res
 
 
 # ---------------------------- endpoints ---------------------------- #
