@@ -16,7 +16,10 @@ from pydantic import BaseModel, Field
 SAMPLE_RATE = 44_100   # Hz
 BIT_DEPTH = 16         # bits per sample
 CHANNELS = 1
-ONE_SIZE = 32768
+MIN_VAL = -32768
+MAX_VAL = 32767
+NUM_BINS = 11
+CELL_SIZE = 3
 
 app = FastAPI(swagger_ui_parameters={"syntaxHighlight": False})
 
@@ -57,23 +60,42 @@ def _empty_wav(duration_sec: float = 1.0) -> bytes:
 
 # ---------------------------- TODO: your logic ---------------------------- #
 
+def digit_to_average_sample(digit: int) -> int:
+    step = (MAX_VAL - MIN_VAL + 1) / NUM_BINS
+    range_start = MIN_VAL + int(digit * step)
+    range_end = MIN_VAL + int((digit + 1) * step) - 1
+    average = (range_start + range_end) // 2
+    return average
+
+def sample_to_digit(sample: int) -> int:
+    step = (MAX_VAL - MIN_VAL + 1) / NUM_BINS
+    shifted = sample - MIN_VAL
+    bin_index = int(shifted // step)
+    return min(bin_index, NUM_BINS - 1)
+
+
 def text_to_audio(text: str) -> bytes:
     n_samples = int(SAMPLE_RATE * 10)
     line = np.zeros(n_samples, dtype=np.int16) 
 
-    # for i, char in enumerate(text):
-    #     line[i] = int(char)+1
     i = 0
-    for char in text:
-        t = int(char)
-        t = ONE_SIZE/12*(t+1)
-        line[i] = t
-        i += 1
-        line[i] = t
-        i += 1
-        line[i] = t
-        i += 1
-    
+    while i < n_samples:
+        for char in text:
+            t = int(char)
+            for _ in range(CELL_SIZE):
+                line[i] = digit_to_average_sample(t)
+                i += 1
+                if i >= n_samples:
+                    break
+            if i >= n_samples:
+                break
+        if i >= n_samples:
+            break
+        for _ in range(CELL_SIZE):
+            line[i] = digit_to_average_sample(10)
+            i += 1
+            if i >= n_samples:
+                break
 
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wf:
@@ -85,6 +107,7 @@ def text_to_audio(text: str) -> bytes:
 
 
 def audio_to_text(wav_bytes: bytes) -> str:
+    n_samples = int(SAMPLE_RATE * 10)
     buf = io.BytesIO(wav_bytes)
     with wave.open(buf, "rb") as wf:
         assert wf.getnchannels() == CHANNELS
@@ -94,34 +117,37 @@ def audio_to_text(wav_bytes: bytes) -> str:
         frames = wf.readframes(wf.getnframes())
     
     line = np.frombuffer(frames, dtype=np.int16)
-    i = 0
     res = ''
-    while line[i] > ONE_SIZE/12-ONE_SIZE/24:
-        can = []
-        t = line[i]-1
-        for j in range(10):
-            if ONE_SIZE/12*(j+1)-ONE_SIZE/24 <= t <= ONE_SIZE/12*(j+1)+ONE_SIZE/24:
-                can.append(str(j))
+    can = [[]]
+    i = 0
+    j = 0
+    while i < n_samples:
+        h = []
+        for _ in range(CELL_SIZE):
+            h.append(line[i])
+            i += 1
+            if i >= n_samples:
                 break
-        i += 1
-        t = line[i]-1
-        for j in range(10):
-            if ONE_SIZE/12*(j+1)-ONE_SIZE/24 <= t <= ONE_SIZE/12*(j+1)+ONE_SIZE/24:
-                can.append(str(j))
-                break
-        i += 1
-        t = line[i]-1
-        for j in range(10):
-            if ONE_SIZE/12*(j+1)-ONE_SIZE/24 <= t <= ONE_SIZE/12*(j+1)+ONE_SIZE/24:
-                can.append(str(j))
-                break
-        i += 1
-        for e in can:
-            if can.count(e) > 1:
-                res += e
+        sum_ = 0
+        for e in h:
+            sum_ += int(e)
+        av = sum_/len(h)
+        t = sample_to_digit(av)
+        if t == 10:
+            j = 0
+        else:
+            if j >= len(can):
+                can.append([])
+            can[j].append(t)
+            j += 1
+
+    for can_x in can[:-1]:
+        for x in can_x:
+            if can_x.count(x) > len(can_x)/2:
+                res += str(x)
                 break
         else:
-            res += can[0]
+            res += str(can_x[0])
     return res
 
 
@@ -144,3 +170,12 @@ async def decode_audio(request: DecodeRequest):
 @app.get("/ping")
 async def ping():
     return "ok"
+
+if __name__ == "__main__":
+    for i in range(11):
+        a = digit_to_average_sample(i)
+        print(a, sample_to_digit(a))
+        a += 300
+        print(a, sample_to_digit(a))
+        a -= 600
+        print(a, sample_to_digit(a))
