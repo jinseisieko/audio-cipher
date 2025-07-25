@@ -39,15 +39,16 @@ print("-"*40)
 tests = sorted(f for f in os.listdir(folder_path) if pattern.match(f))
 for file_name in tests:
     test_id = file_name.split('.')[0]
-    print(f'test: {test_id}')
 
     # читаем текст теста
     text = open(os.path.join(folder_path, file_name), 'r', encoding='utf-8').read()
 
     # импортируем функцию-шума
     module = __import__(f'tests.{test_id}', fromlist=['f'])
+    print(f'test: {test_id}', end=" ")
+
     if "description" in dir(module):
-        print(f'test_description: {module.description}')
+        print(f'\033[1;34m{module.description}\033[0m')
     distort = module.f
 
     try:
@@ -87,8 +88,12 @@ for file_name in tests:
         )
         resp.raise_for_status()
         decoded_text = resp.json()['text']
-        print(f'dif: {levenshtein_distance(text, decoded_text)}')
+        ld = levenshtein_distance(text, decoded_text)
+        if ld/len(text) < 0.1:
+            print(f'\033[31mdif\033[0m: \033[32m{levenshtein_distance(text, decoded_text)} ({int(ld/len(text)*100)}%)\033[0m')
+        else:
+            print(f'\033[31mdif\033[0m: {levenshtein_distance(text, decoded_text)} ({int(ld/len(text)*100)}%)')
     except Exception as e:
-        print(f'error: {e}')
-        print('dif: 1e9')
+        print(f'\033[31merror: {e}\033[0m')
+        print('\033[31mdif\033[0m: 1e9 (>100%)')
     print("-"*40)

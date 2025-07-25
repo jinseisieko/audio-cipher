@@ -19,7 +19,7 @@ CHANNELS = 1
 MIN_VAL = -32768
 MAX_VAL = 32767
 NUM_BINS = 11
-CELL_SIZE = 3
+CELL_SIZE = 5
 
 app = FastAPI(swagger_ui_parameters={"syntaxHighlight": False})
 
@@ -170,12 +170,3 @@ async def decode_audio(request: DecodeRequest):
 @app.get("/ping")
 async def ping():
     return "ok"
-
-if __name__ == "__main__":
-    for i in range(11):
-        a = digit_to_average_sample(i)
-        print(a, sample_to_digit(a))
-        a += 300
-        print(a, sample_to_digit(a))
-        a -= 600
-        print(a, sample_to_digit(a))
