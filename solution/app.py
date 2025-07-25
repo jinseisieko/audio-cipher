@@ -1,10 +1,3 @@
-
-"""FastAPI сервис, кодирующий текст в WAV и декодирующий его обратно.
-
-✦ Реализуйте функции `text_to_audio` и `audio_to_text`.
-✦ Формат аудио: 44100Hz, 16‑bit PCM, mono.
-"""
-
 import base64
 import io
 import wave
@@ -19,7 +12,8 @@ CHANNELS = 1
 MIN_VAL = -32768
 MAX_VAL = 32767
 NUM_BINS = 11
-CELL_SIZE = 5
+CELL_SIZE = 6
+TERMINATOR_COUNT = 2
 
 app = FastAPI(swagger_ui_parameters={"syntaxHighlight": False})
 
@@ -45,7 +39,6 @@ class DecodeResponse(BaseModel):
 # ---------------------------- helpers ---------------------------- #
 
 def _empty_wav(duration_sec: float = 1.0) -> bytes:
-    """Возвращает WAV‑байты тишины длиной *duration_sec*."""
     n_samples = int(SAMPLE_RATE * duration_sec)
     silence = np.zeros(n_samples, dtype=np.int16)
 
@@ -58,16 +51,16 @@ def _empty_wav(duration_sec: float = 1.0) -> bytes:
     return buf.getvalue()
 
 
-# ---------------------------- TODO: your logic ---------------------------- #
+# ---------------------------- TODO: logic ---------------------------- #
 
-def digit_to_average_sample(digit: int) -> int:
+def digit_to_sample_value(digit: int) -> int:
     step = (MAX_VAL - MIN_VAL + 1) / NUM_BINS
     range_start = MIN_VAL + int(digit * step)
     range_end = MIN_VAL + int((digit + 1) * step) - 1
     average = (range_start + range_end) // 2
     return average
 
-def sample_to_digit(sample: int) -> int:
+def sample_to_digit_value(sample: int) -> int:
     step = (MAX_VAL - MIN_VAL + 1) / NUM_BINS
     shifted = sample - MIN_VAL
     bin_index = int(shifted // step)
@@ -75,26 +68,29 @@ def sample_to_digit(sample: int) -> int:
 
 
 def text_to_audio(text: str) -> bytes:
-    n_samples = int(SAMPLE_RATE * 10)
-    line = np.zeros(n_samples, dtype=np.int16) 
+    total_samples = int(SAMPLE_RATE * 10)
+    audio_data = np.zeros(total_samples, dtype=np.int16) 
 
-    i = 0
-    while i < n_samples:
+    sample_index = 0
+    while sample_index < total_samples:
         for char in text:
-            t = int(char)
+            digit = int(char)
             for _ in range(CELL_SIZE):
-                line[i] = digit_to_average_sample(t)
-                i += 1
-                if i >= n_samples:
+                audio_data[sample_index] = digit_to_sample_value(digit)
+                sample_index += 1
+                if sample_index >= total_samples:
                     break
-            if i >= n_samples:
+            if sample_index >= total_samples:
                 break
-        if i >= n_samples:
+        if sample_index >= total_samples:
             break
-        for _ in range(CELL_SIZE):
-            line[i] = digit_to_average_sample(10)
-            i += 1
-            if i >= n_samples:
+        for _ in range(TERMINATOR_COUNT):
+            for _ in range(CELL_SIZE):
+                audio_data[sample_index] = digit_to_sample_value(10)
+                sample_index += 1
+                if sample_index >= total_samples:
+                    break
+            if sample_index >= total_samples:
                 break
 
     buf = io.BytesIO()
@@ -102,12 +98,12 @@ def text_to_audio(text: str) -> bytes:
         wf.setnchannels(CHANNELS)
         wf.setsampwidth(BIT_DEPTH // 8)
         wf.setframerate(SAMPLE_RATE)
-        wf.writeframes(line.tobytes())
+        wf.writeframes(audio_data.tobytes())
     return buf.getvalue()
 
 
 def audio_to_text(wav_bytes: bytes) -> str:
-    n_samples = int(SAMPLE_RATE * 10)
+    total_samples = int(SAMPLE_RATE * 10)
     buf = io.BytesIO(wav_bytes)
     with wave.open(buf, "rb") as wf:
         assert wf.getnchannels() == CHANNELS
@@ -116,39 +112,43 @@ def audio_to_text(wav_bytes: bytes) -> str:
 
         frames = wf.readframes(wf.getnframes())
     
-    line = np.frombuffer(frames, dtype=np.int16)
-    res = ''
-    can = [[]]
-    i = 0
-    j = 0
-    while i < n_samples:
-        h = []
+    audio_samples = np.frombuffer(frames, dtype=np.int16)
+    result_text = ''
+    digit_groups = [[]]
+    group_index = 0
+    
+    sample_index = 0
+    while sample_index < total_samples:
+        cell_samples = []
         for _ in range(CELL_SIZE):
-            h.append(line[i])
-            i += 1
-            if i >= n_samples:
+            cell_samples.append(int(audio_samples[sample_index]))
+            sample_index += 1
+            if sample_index >= total_samples:
                 break
-        sum_ = 0
-        for e in h:
-            sum_ += int(e)
-        av = sum_/len(h)
-        t = sample_to_digit(av)
-        if t == 10:
-            j = 0
+        
+        sample_sum = sum(cell_samples)
+        avg_sample = sample_sum / len(cell_samples)
+        digit = sample_to_digit_value(int(avg_sample))
+        
+        if digit == 10:
+            group_index = 0
         else:
-            if j >= len(can):
-                can.append([])
-            can[j].append(t)
-            j += 1
+            if group_index >= len(digit_groups):
+                digit_groups.append([])
+            digit_groups[group_index].append(digit)
+            group_index += 1
 
-    for can_x in can[:-1]:
-        for x in can_x:
-            if can_x.count(x) > len(can_x)/2:
-                res += str(x)
+    for group in digit_groups[:-1]:
+        found_majority = False
+        for digit in group:
+            if group.count(digit) > len(group) / 2:
+                result_text += str(digit)
+                found_majority = True
                 break
-        else:
-            res += str(can_x[0])
-    return res
+        if not found_majority and group:
+            result_text += str(group[0])
+            
+    return result_text
 
 
 # ---------------------------- endpoints ---------------------------- #
