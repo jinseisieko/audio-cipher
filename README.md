@@ -43,7 +43,7 @@
 ## 3. Структура репозитория
 
 ```
-shannon-template/
+audio-cipher/
 ├── solution/                # Тут вы пишете код сервиса
 │   ├── app.py               # Основной файл FastAPI, реализуйте text_to_audio и audio_to_text
 │   └── requirements.txt
