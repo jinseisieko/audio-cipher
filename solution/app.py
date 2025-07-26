@@ -12,8 +12,8 @@ CHANNELS = 1
 MIN_VAL = -32768
 MAX_VAL = 32767
 NUM_BINS = 11
-CELL_SIZE = 6
-TERMINATOR_COUNT = 2
+CELL_SIZE = 7
+TERMINATOR_COUNT = 10
 
 app = FastAPI(swagger_ui_parameters={"syntaxHighlight": False})
 
